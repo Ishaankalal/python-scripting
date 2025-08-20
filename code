@@ -1,0 +1,84 @@
+import os
+import re
+
+def clean_table_line(line):
+    """Remove semicolon table formatting, keep compact info."""
+    parts = [p.strip() for p in line.split(";") if p.strip()]
+    return " | ".join(parts)
+
+
+def parse_fit_report(filename):
+    device = None
+    logic_util = None
+    registers = None
+    pins = None
+
+    if not os.path.exists(filename):
+        return None, None, None, None
+
+    with open(filename, "r") as f:
+        for line in f:
+            line = line.strip()
+
+            # Device info
+            if "Device" in line and "compatible" in line:
+                device = line
+
+            # Logic utilization
+            if re.search(r"Logic\s+utilization", line, re.IGNORECASE):
+                logic_util = clean_table_line(line)
+
+            # Registers
+            if re.search(r"Total\s+registers", line, re.IGNORECASE):
+                registers = clean_table_line(line)
+
+            # Pins (avoid warnings, only take table lines)
+            if re.search(r"Total\s+pins", line, re.IGNORECASE) and ";" in line:
+                pins = clean_table_line(line)
+
+    return device, logic_util, registers, pins
+
+
+def parse_sta_report(filename):
+    fmax = None
+    wns = None
+
+    if not os.path.exists(filename):
+        return None, None
+
+    with open(filename, "r") as f:
+        for line in f:
+            line = line.strip()
+
+            # Fmax (look for MHz)
+            if re.search(r"Fmax", line, re.IGNORECASE) and "MHz" in line:
+                fmax = clean_table_line(line)
+
+            # Worst slack (numeric)
+            if re.search(r"slack", line, re.IGNORECASE):
+                numbers = re.findall(r"-?\d+\.\d+", line)  # capture floats
+                if numbers:
+                    wns = numbers[-1]  # last float is usually slack value
+
+    return fmax, wns
+
+
+if __name__ == "__main__":
+    fit_file = "okok.fit.rpt"
+    sta_file = "okok.sta.rpt"
+
+    device, logic, regs, pins = parse_fit_report(fit_file)
+    fmax, wns = parse_sta_report(sta_file)
+
+    print("==== Quartus Report Summary ====")
+    print(f"Report Files : {fit_file}, {sta_file}\n")
+
+    print("---- Area / Utilization ----")
+    print(f"Device Info : {device if device else 'Not found ❌'}")
+    print(f"Logic Usage : {logic if logic else 'Not found ❌'}")
+    print(f"Registers   : {regs if regs else 'Not found ❌'}")
+    print(f"Pins        : {pins if pins else 'Not found ❌'}\n")
+
+    print("---- Timing Analysis ----")
+    print(f"Fmax        : {fmax if fmax else 'Not found ❌'}")
+    print(f"Worst Slack : {wns if wns else 'Not found ❌'}")
